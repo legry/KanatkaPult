@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">KanatkaPult</string>
+    <string-array name="cmnds">
+        <item>left</item>
+        <item>right</item>
+        <item>start</item>
+        <item>aut</item>
+        <item>main</item>
+        <item>alstp</item>
+        <item>back</item>
+        <item>not</item>
+        <item>front</item>
+    </string-array>
+</resources>
