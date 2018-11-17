@@ -28,6 +28,7 @@ public class WebSocketClient extends WebSocketAdapter implements NetworkInfoList
     private Context context;
     private NetworkInfo.State state;
     private WebSocketState stateSocket;
+    private boolean recont = false;
 
     public WebSocketClient(Context context, ChangeListener changeListener) {
         this.changeListener = changeListener;
@@ -57,6 +58,7 @@ public class WebSocketClient extends WebSocketAdapter implements NetworkInfoList
                 ws.sendPing();
                 setPongFlag(false);
             } else {
+                recont = true;
                 wsDisconnect();
             }
         }
@@ -95,6 +97,12 @@ public class WebSocketClient extends WebSocketAdapter implements NetworkInfoList
         switch (newState) {
             case CLOSING:
                 changeListener.OnChangeListener(false);
+                break;
+            case CLOSED:
+                if (recont) {
+                    wsConnect();
+                    recont = false;
+                }
                 break;
         }
     }

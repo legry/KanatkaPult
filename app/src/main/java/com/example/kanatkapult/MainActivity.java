@@ -1,6 +1,8 @@
 package com.example.kanatkapult;
 
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
@@ -10,6 +12,7 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -24,20 +27,21 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 public class MainActivity extends AppCompatActivity implements View.OnTouchListener,
-        ChangeListener {
+        ChangeListener, View.OnLongClickListener {
 
     private WebSocketClient blCn;
-    TextView amp, ustamp;
+    private TextView amp, ustamp;
     private RecyclerAdapter recyclerAdapter;
-    Timer timer;
-    boolean ustok = false;
-    int ust;
-    int j, amper = 0;
-    boolean regust = false, reg = false;
-    ImageButton minus, plus;
+    private int ust;
+    private int j, amper = 0;
+    private boolean regust = false, reg = false;
+    private ImageButton minus, plus;
     private RecyclerView recyclerView;
     private Drawable[] drawables;
     private String[] cmnds;
+    private int amps;
+    private String data;
+    private boolean isConnected;
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -46,6 +50,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         setContentView(R.layout.activity_main);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         amp = findViewById(R.id.amp);
+        amp.setOnLongClickListener(this);
         ustamp = findViewById(R.id.ust);
         minus = findViewById(R.id.minus);
         plus = findViewById(R.id.plus);
@@ -73,7 +78,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             Toast.makeText(this, age, Toast.LENGTH_SHORT).show();
         }
         BluthCrt();
-        timer = new Timer();
+        Timer timer = new Timer();
         timer.schedule(new TimerTask() {
             @Override
             public void run() {
@@ -109,18 +114,64 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     protected void onResume() {
         super.onResume();
         blCn.wsConnect();
+        Log.i("myws", "resume");
     }
 
     @Override
     protected void onStop() {
         blCn.wsDisconnect();
+        Log.i("myws", "stop");
         super.onStop();
     }
 
     void BluthCrt() {
         blCn = new WebSocketClient(MainActivity.this, this);
-        recyclerAdapter = new RecyclerAdapter(drawables, cmnds, blCn);
+        recyclerAdapter = new RecyclerAdapter(drawables, cmnds, blCn, new AttachedDeatachedListener() {
+            @Override
+            public void onAttached() {
+                if (isConnected) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            updateRecycler();
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void onDetached() {
+
+            }
+        });
         recyclerView.setAdapter(recyclerAdapter);
+    }
+
+    void dialogCreator() {
+        final EditText edittext = new EditText(MainActivity.this);
+        AlertDialog.Builder alert = new AlertDialog.Builder(MainActivity.this);
+        alert.setMessage("Введите значение");
+        alert.setTitle("Калибровка тока");
+
+        alert.setView(edittext);
+
+        alert.setPositiveButton("Скалибровать", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int whichButton) {
+                int kal = Integer.parseInt(edittext.getText().toString());
+                JSONArray jsonArray = new JSONArray();
+                jsonArray.put(kal);
+                jsonArray.put(amps);
+                blCn.WriteData("json" + jsonArray.toString());
+
+            }
+        });
+
+        alert.setNegativeButton("Отмена", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int whichButton) {
+                // what ever you want to do with No option.
+            }
+        });
+        alert.show();
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -148,6 +199,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
     @Override
     public void OnChangeListener(final boolean isConnect) {
+        isConnected = isConnect;
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -156,8 +208,6 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                     plus.setVisibility(View.VISIBLE);
                     ustamp.setVisibility(View.VISIBLE);
                     amp.setVisibility(View.VISIBLE);
-                    blCn.WriteData("<inic>");
-                    Log.i("myws", "isConnect : " + String.valueOf(true));
                 } else {
                     for (int i = 0; i < 9; i++) {
                         recyclerAdapter.getImageButtons()[i].setVisibility(View.INVISIBLE);
@@ -166,11 +216,73 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                     plus.setVisibility(View.INVISIBLE);
                     ustamp.setVisibility(View.INVISIBLE);
                     amp.setVisibility(View.INVISIBLE);
-                    ustok = false;
-                    Log.i("myws", "isConnect : " + String.valueOf(false));
                 }
             }
         });
+    }
+
+    void updateRecycler() {
+        try {
+            JSONArray jsonArray = new JSONArray(data);
+            boolean st;
+            st = (boolean) jsonArray.get(0);
+            if (st) {
+                recyclerAdapter.getImageButtons()[0].setSelected(false);
+                recyclerAdapter.getImageButtons()[1].setSelected(true);
+            } else {
+                recyclerAdapter.getImageButtons()[1].setSelected(false);
+                recyclerAdapter.getImageButtons()[0].setSelected(true);
+            }
+            recyclerAdapter.getImageButtons()[0].setVisibility(View.VISIBLE);
+            recyclerAdapter.getImageButtons()[1].setVisibility(View.VISIBLE);
+            st = (boolean) jsonArray.get(1);
+            recyclerAdapter.getImageButtons()[2].setSelected(st);
+            recyclerAdapter.getImageButtons()[2].setVisibility(View.VISIBLE);
+            st = (boolean) jsonArray.get(2);
+            if (st) {
+                recyclerAdapter.getImageButtons()[3].setSelected(false);
+                recyclerAdapter.getImageButtons()[4].setSelected(true);
+            } else {
+                recyclerAdapter.getImageButtons()[4].setSelected(false);
+                recyclerAdapter.getImageButtons()[3].setSelected(true);
+            }
+            recyclerAdapter.getImageButtons()[3].setVisibility(View.VISIBLE);
+            recyclerAdapter.getImageButtons()[4].setVisibility(View.VISIBLE);
+            st = (boolean) jsonArray.get(3);
+            recyclerAdapter.getImageButtons()[5].setSelected(!st);
+            for (int i = 0; i < 9; i++) {
+                if (i != 5) {
+                    recyclerAdapter.getImageButtons()[i].setEnabled(st);
+                }
+            }
+            recyclerAdapter.getImageButtons()[5].setVisibility(View.VISIBLE);
+            st = (boolean) jsonArray.get(4);
+            if (st) {
+                recyclerAdapter.getImageButtons()[6].setSelected(true);
+                recyclerAdapter.getImageButtons()[8].setEnabled(false);
+                recyclerAdapter.getImageButtons()[8].setSelected(false);
+                recyclerAdapter.getImageButtons()[7].setSelected(false);
+            } else {
+                st = (boolean) jsonArray.get(5);
+                if (st) {
+                    recyclerAdapter.getImageButtons()[8].setSelected(true);
+                    recyclerAdapter.getImageButtons()[6].setEnabled(false);
+                    recyclerAdapter.getImageButtons()[6].setSelected(false);
+                    recyclerAdapter.getImageButtons()[7].setSelected(false);
+                } else {
+                    recyclerAdapter.getImageButtons()[7].setSelected(true);
+                    recyclerAdapter.getImageButtons()[6].setEnabled(true);
+                    recyclerAdapter.getImageButtons()[8].setEnabled(true);
+                    recyclerAdapter.getImageButtons()[6].setSelected(false);
+                    recyclerAdapter.getImageButtons()[8].setSelected(false);
+                }
+            }
+            recyclerAdapter.getImageButtons()[6].setVisibility(View.VISIBLE);
+            recyclerAdapter.getImageButtons()[7].setVisibility(View.VISIBLE);
+            recyclerAdapter.getImageButtons()[8].setVisibility(View.VISIBLE);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -179,94 +291,36 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
             @Override
             public void run() {
                 if (data.contains("[")) {
-                    try {
-                        JSONArray jsonArray = new JSONArray(data);
-                        boolean st;
-                        st = (boolean) jsonArray.get(0);
-                        if (st) {
-                            recyclerAdapter.getImageButtons()[0].setSelected(false);
-                            recyclerAdapter.getImageButtons()[1].setSelected(true);
-                        } else {
-                            recyclerAdapter.getImageButtons()[1].setSelected(false);
-                            recyclerAdapter.getImageButtons()[0].setSelected(true);
-                        }
-                        recyclerAdapter.getImageButtons()[0].setVisibility(View.VISIBLE);
-                        recyclerAdapter.getImageButtons()[1].setVisibility(View.VISIBLE);
-                        st = (boolean) jsonArray.get(1);
-                        recyclerAdapter.getImageButtons()[2].setSelected(st);
-                        recyclerAdapter.getImageButtons()[2].setVisibility(View.VISIBLE);
-                        st = (boolean) jsonArray.get(2);
-                        if (st) {
-                            recyclerAdapter.getImageButtons()[3].setSelected(false);
-                            recyclerAdapter.getImageButtons()[4].setSelected(true);
-                        } else {
-                            recyclerAdapter.getImageButtons()[4].setSelected(false);
-                            recyclerAdapter.getImageButtons()[3].setSelected(true);
-                        }
-                        recyclerAdapter.getImageButtons()[3].setVisibility(View.VISIBLE);
-                        recyclerAdapter.getImageButtons()[4].setVisibility(View.VISIBLE);
-                        st = (boolean) jsonArray.get(3);
-                        recyclerAdapter.getImageButtons()[5].setSelected(!st);
-                        for (int i = 0; i < 9; i++) {
-                            if (i != 5) {
-                                recyclerAdapter.getImageButtons()[i].setEnabled(st);
-                            }
-                        }
-                        recyclerAdapter.getImageButtons()[5].setVisibility(View.VISIBLE);
-                        st = (boolean) jsonArray.get(4);
-                        if (st) {
-                            recyclerAdapter.getImageButtons()[6].setSelected(true);
-                            recyclerAdapter.getImageButtons()[8].setEnabled(false);
-                            recyclerAdapter.getImageButtons()[8].setSelected(false);
-                            recyclerAdapter.getImageButtons()[7].setSelected(false);
-                        } else {
-                            st = (boolean) jsonArray.get(5);
-                            if (st) {
-                                recyclerAdapter.getImageButtons()[8].setSelected(true);
-                                recyclerAdapter.getImageButtons()[6].setEnabled(false);
-                                recyclerAdapter.getImageButtons()[6].setSelected(false);
-                                recyclerAdapter.getImageButtons()[7].setSelected(false);
-                            } else {
-                                recyclerAdapter.getImageButtons()[7].setSelected(true);
-                                recyclerAdapter.getImageButtons()[6].setEnabled(true);
-                                recyclerAdapter.getImageButtons()[8].setEnabled(true);
-                                recyclerAdapter.getImageButtons()[6].setSelected(false);
-                                recyclerAdapter.getImageButtons()[8].setSelected(false);
-                            }
-                        }
-                        recyclerAdapter.getImageButtons()[6].setVisibility(View.VISIBLE);
-                        recyclerAdapter.getImageButtons()[7].setVisibility(View.VISIBLE);
-                        recyclerAdapter.getImageButtons()[8].setVisibility(View.VISIBLE);
-                        blCn.WriteData("<?ust>");
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                    }
+                    MainActivity.this.data = data;
+                    updateRecycler();
                 } else {
                     if (data.startsWith("<") && data.endsWith(">")) {
-                        if (!ustok) {
-                            if (data.contains("ust")) {
-                                ustamp.setText(data.substring(4, data.length() - 1));
-                                ust = Integer.parseInt(data.substring(4, data.length() - 1));
-                                ustok = true;
-                                blCn.WriteData("<amp>");
-                            }
+                        if (data.contains("ust")) {
+                            String uststr = data.substring(4, data.length() - 1);
+                            ustamp.setText(uststr);
+                            ust = Integer.parseInt(uststr);
                         } else {
-                            if (j < 10) {
+                            if (j < 5) {
                                 j += 1;
                                 amper += Integer.parseInt(data.substring(data.indexOf("<") + 1, data.lastIndexOf(">")));
                             }
-                            if (j == 10) {
-                                float amps = amper / 10;
+                            if (j == 5) {
+                                amps = Math.round(amper / 5);
                                 amp.setText(String.valueOf(amps));
                                 j = 0;
                                 amper = 0;
                             }
-                            blCn.WriteData("<amp>");
                         }
                     }
                 }
             }
         });
+    }
+
+    @Override
+    public boolean onLongClick(View view) {
+        dialogCreator();
+        return true;
     }
 }
 

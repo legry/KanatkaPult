@@ -1,6 +1,8 @@
 package com.example.kanatkapult;
 
+import android.annotation.SuppressLint;
 import android.graphics.drawable.Drawable;
+import android.support.annotation.NonNull;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -8,7 +10,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
 
+import com.example.kanatkapult.WebSocketWorker.TimeChecker;
 import com.example.kanatkapult.WebSocketWorker.WebSocketClient;
+
+import java.util.TimerTask;
 
 class RecyclerAdapter extends RecyclerView.Adapter<RecyclerAdapter.MyHolder> {
     private Drawable[] drawables;
@@ -24,24 +29,56 @@ class RecyclerAdapter extends RecyclerView.Adapter<RecyclerAdapter.MyHolder> {
     private int hod_back = 6;
     private int hod_not = 7;
     private int hod_forward = 8;
+    private TimeChecker timeChecker;
+    private boolean isAttached = false;
+    private AttachedDeatachedListener listener;
+
+    class MyTask extends TimerTask {
+        @Override
+        public void run() {
+            if ((isAttached)) {
+                listener.onAttached();
+            } else {
+                listener.onDetached();
+            }
+        }
+    }
 
     ImageButton[] getImageButtons() {
         return imageButtons;
     }
 
-    RecyclerAdapter(Drawable[] drawables, String[] cmnds, WebSocketClient bluetoothConnect) {
+    RecyclerAdapter(Drawable[] drawables, String[] cmnds, WebSocketClient bluetoothConnect, AttachedDeatachedListener listener) {
         this.drawables = drawables;
         this.cmnds = cmnds;
         this.bluetoothConnect = bluetoothConnect;
+        this.listener = listener;
+        timeChecker = new TimeChecker(new MyTask());
     }
 
+    @NonNull
     @Override
-    public MyHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+    public MyHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         return new MyHolder(LayoutInflater.from(parent.getContext()).inflate(R.layout.btns, parent, false));
     }
 
     @Override
-    public void onBindViewHolder(final MyHolder holder, final int position) {
+    public void onViewAttachedToWindow(@NonNull MyHolder holder) {
+        super.onViewAttachedToWindow(holder);
+        isAttached = true;
+        timeChecker.restartMyTimer(new MyTask());
+    }
+
+    @Override
+    public void onViewDetachedFromWindow(@NonNull MyHolder holder) {
+        super.onViewDetachedFromWindow(holder);
+        isAttached = false;
+        timeChecker.restartMyTimer(new MyTask());
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    @Override
+    public void onBindViewHolder(@NonNull final MyHolder holder, @SuppressLint("RecyclerView") final int position) {
         holder.imBtn.setImageDrawable(drawables[position]);
         imageButtons[position] = holder.imBtn;
         imageButtons[position].setVisibility(View.INVISIBLE);

@@ -7,16 +7,14 @@ import android.content.IntentFilter;
 import android.net.NetworkInfo;
 import android.net.wifi.WifiManager;
 
-import java.util.Timer;
 import java.util.TimerTask;
 
 class TimerNetworkInfo extends BroadcastReceiver {
 
-    private Timer timer;
-    private MyTask mytask;
     private Intent intent;
-    private NetworkInfoListener infoListener;
     private Context context;
+    private TimeChecker timeChecker;
+    private NetworkInfoListener infoListener;
 
     TimerNetworkInfo(Context context, NetworkInfoListener infoListener) {
         this.context = context;
@@ -24,21 +22,14 @@ class TimerNetworkInfo extends BroadcastReceiver {
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
         this.context.registerReceiver(this, intentFilter);
-        mytask = new MyTask(infoListener);
-        setMyTimer();
+        timeChecker = new TimeChecker(new MyTask(this.infoListener));
     }
 
-    void unreg() {
+    public void unreg() {
         context.unregisterReceiver(this);
     }
 
-    private void setMyTimer() {
-        timer = new Timer();
-        mytask = new MyTask(infoListener);
-        timer.schedule(mytask, 500);
-    }
-
-    private NetworkInfo.State getState() {
+    public NetworkInfo.State getState() {
         NetworkInfo info = intent.getParcelableExtra(WifiManager.EXTRA_NETWORK_INFO);
         return info.getState();
     }
@@ -46,9 +37,7 @@ class TimerNetworkInfo extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         this.intent = intent;
-        mytask.cancel();
-        timer.cancel();
-        setMyTimer();
+        timeChecker.restartMyTimer(new MyTask(infoListener));
     }
 
     class MyTask extends TimerTask {
